@@ -262,11 +262,12 @@ def run_xnat():
                 if scan_name in list(scan_dict) and scan_usable == 'usable':
                     BIDs_scan=scan_dict[scan_name]
                     BIDs_subject=str(subject).zfill(BIDs_num_length)
+                    scan_name_no_spaces = scan_name.replace(" ","_")
                     #outdir without session: out_dir=base_dir+'sub-%s/%s/dcms/%s_%s' % (subject,BIDs_scan,scan,scan_name)
                     if session_labels == "None":
-                        out_dir = base_dir+'sub-%s/%s/%s_%s' % (BIDs_subject, BIDs_scan, scan, scan_name)
+                        out_dir = base_dir+'sub-%s/%s/%s_%s' % (BIDs_subject, BIDs_scan, scan, scan_name_no_spaces)
                     else:
-                        out_dir = base_dir+'sub-%s/ses-%s/%s/%s_%s' % (BIDs_subject, session, BIDs_scan, scan, scan_name)
+                        out_dir = base_dir+'sub-%s/ses-%s/%s/%s_%s' % (BIDs_subject, session, BIDs_scan, scan, scan_name_no_spaces)
                     if not os.path.exists(out_dir):
                         os.makedirs(out_dir)
                     dicom_query = xnat_query_dicoms(xnat_session.cookie,xnat_session.url_base,project,subject,session_date,scan)
