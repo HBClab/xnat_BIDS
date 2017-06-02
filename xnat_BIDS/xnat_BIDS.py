@@ -63,6 +63,16 @@ class xnat_query_subjects(object):
             subject_list_dict = subject_json['ResultSet']['Result']
             self.subject_ids = { x['label']:0 for x in subject_list_dict }
 
+    def filter_subjects(self,subjects):
+        if subjects != "ALL": #if the subject list specifies who to download
+            missing_xnat_subjects = list(set(subjects) - set([int(x) for x in self.subject_ids.keys()]))
+
+        if missing_xnat_subjects:
+            self.filt_subjects = list(set(subjects) - set(missing_xnat_subjects))
+            print('xnat does not have data for these subjects: %s' % str(missing_xnat_subjects))
+        else:
+            self.filt_subject_ids = {int(x) for x in self.subject_ids.keys()} #use all the subjects otherwise
+
 
 class xnat_query_sessions(object):
     """get the sessions from a particular subject"""
@@ -87,6 +97,13 @@ class xnat_query_sessions(object):
             else:
                 #not supported in this script
                 self.session_ids = { x['label']: 0 for x in session_list_dict }
+    def filter_sessions(self,sessions):
+        #updates the session_ids dictionary
+        if sessions != "ALL":
+            #find all session that are not a part of the list
+            pop_list=list(set(self.session_ids.keys()) - set(sessions))
+            for key in pop_list:
+                self.session_ids.pop(key) #remove session from analysis
 
 
 class xnat_query_scans(object):
@@ -203,42 +220,32 @@ def run_xnat():
 
     #get the list of subjects
     subject_query = xnat_query_subjects(xnat_session.cookie,xnat_session.url_base,project)
+    #gives the object subject_query the dictionary subject_ids
     subject_query.get_subjects()
-
-    if subjects != "ALL": #if the subject list specifies who to download
-      missing_xnat_subjects = list(set(subjects) - set([int(x) for x in subject_query.subject_ids.keys()]))
-
-      if missing_xnat_subjects:
-        subjects = list(set(subjects) - set(missing_xnat_subjects))
-        print('xnat does not have data for these subjects: %s' % str(missing_xnat_subjects))
-    else:
-        subjects = [int(x) for x in subject_query.subject_ids.keys()] #use all the subjects otherwise
-
-
+    #gives the object subject_query the dictionary filt_subject_ids
+    subject_query.filter_subjects(subjects)
+    #assign subjects the filtered dictionary
+    subjects = subject_query.filt_subject_ids
     for subject in subjects:
         session_query = xnat_query_sessions(xnat_session.cookie,xnat_session.url_base,project,subject)
         if session_labels == "None":
             print('no session labels, assuming there is only one session')
             session_labels_dummy=['dummy_session']
-            subject_sessions = session_query.get_sessions(session_labels_dummy)
+            session_query.get_sessions(session_labels_dummy)
         else:
             session_query.get_sessions(session_labels)
-            xnat_sessions = session_query.session_ids
-            #example output
-            # [sub140_session_query.session_ids[x].keys()[0] for x in sub140_session_query.session_ids.keys()]
-            # ['post', 'pre']
-            #sessions = [session_query.session_ids[x].keys()[0] for x in session_query.session_ids.keys()]
-            if sessions != "ALL":
-                #find all session that are not a part of the list
-                pop_list=list(set(xnat_sessions.keys()) - set(sessions))
-                for key in pop_list:
-                    xnat_sessions.pop(key) #remove session from analysis
-            subject_sessions = xnat_sessions
-            subject_query.subject_ids[subject] = subject_sessions
+
+        #filtering the sessions
+        session_query.filter_sessions(sessions)
+        subject_sessions = session_query.session_ids
+        #update the master subject dictionary
+        subjects[subject] = subject_sessions
         for session in subject_sessions: #where session is pre, post, etc
-            #how to get the actual number which the session is loaded in xnat
+            #getting the session folder name in xnat (e.g. 20150524)
             session_date = subject_sessions[session].keys()[0]
+            #scan_query object
             scan_query = xnat_query_scans(xnat_session.cookie,xnat_session.url_base,project,subject,session_date)
+            #makes a dictionary of scan ids
             scan_query.get_scans()
             subject_sessions[session] = scan_query.scan_ids
             for scan in scan_query.scan_ids:
