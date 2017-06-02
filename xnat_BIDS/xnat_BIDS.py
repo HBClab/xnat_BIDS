@@ -1,211 +1,234 @@
+#!/usr/bin/env python
 from __future__ import absolute_import, division, print_function
-import numpy as np
-import pandas as pd
-import scipy.optimize as opt
-from scipy.special import erf
-from .due import due, Doi
+import requests
+import os
+import sys
+"""
+Purpose:
+    Download dicoms from xnat and place them into
+    a BIDs "like" directory structure.
+    using the xnat rest API to download dicoms.
+    see here for xnat REST API documentation: (https://wiki.xnat.org/display/XNAT16/Using+the+XNAT+REST+API)
+TODO:
+    better error checking
+    add a log to write events to
+    handle conditionals better
+    find a better way to call the script instead of main()
+    find a way to pass the password in besides writing it in json file.
+    add json descriptors according to BIDs format.
+    revise some ugly formating
+    add check for quality of scan (e.g. usable?)
+    don't copy if already completed? (or just have user be cognizant?)
+"""
 
-__all__ = ["Model", "Fit", "opt_err_func", "transform_data", "cumgauss"]
+import requests
+import os
+import sys
 
+__all__ = ['xnat_init_session','xnat_query_subjects','xnat_query_sessions','xnat_query_scans','xnat_query_dicoms']
 
-# Use duecredit (duecredit.org) to provide a citation to relevant work to
-# be cited. This does nothing, unless the user has duecredit installed,
-# And calls this with duecredit (as in `python -m duecredit script.py`):
-due.cite(Doi("10.1167/13.9.30"),
-         description="Template project for small scientific Python projects",
-         tags=["reference-implementation"],
-         path='shablona')
+class xnat_init_session(object):
+    """starts the xnat session and allows user to login to a particular project page"""
+    def __init__(self,username,password,project):
+        self.url_base = 'https://rpacs.icts.uiowa.edu/xnat/REST/projects/%s/' % project
+        self.username = username
+        self.password = password
+        self.project = project
 
+    def login(self):
+        login_query = requests.get(self.url_base,auth=(self.username,self.password))
 
-def transform_data(data):
-    """
-    Function that takes experimental data and gives us the
-    dependent/independent variables for analysis.
-
-    Parameters
-    ----------
-    data : Pandas DataFrame or string.
-        If this is a DataFrame, it should have the columns `contrast1` and
-        `answer` from which the dependent and independent variables will be
-        extracted. If this is a string, it should be the full path to a csv
-        file that contains data that can be read into a DataFrame with this
-        specification.
-
-    Returns
-    -------
-    x : array
-        The unique contrast differences.
-    y : array
-        The proportion of '2' answers in each contrast difference
-    n : array
-        The number of trials in each x,y condition
-    """
-    if isinstance(data, str):
-        data = pd.read_csv(data)
-
-    contrast1 = data['contrast1']
-    answers = data['answer']
-
-    x = np.unique(contrast1)
-    y = []
-    n = []
-
-    for c in x:
-        idx = np.where(contrast1 == c)
-        n.append(float(len(idx[0])))
-        answer1 = len(np.where(answers[idx[0]] == 1)[0])
-        y.append(answer1 / n[-1])
-    return x, y, n
+        if login_query.ok:
+            cookie_info = login_query.cookies._cookies['rpacs.icts.uiowa.edu']['/xnat']['JSESSIONID']
+        else:
+            print('error')
+        self.cookie = {cookie_info.name : cookie_info.value}
 
 
-def cumgauss(x, mu, sigma):
-    """
-    The cumulative Gaussian at x, for the distribution with mean mu and
-    standard deviation sigma.
-
-    Parameters
-    ----------
-    x : float or array
-       The values of x over which to evaluate the cumulative Gaussian function
-
-    mu : float
-       The mean parameter. Determines the x value at which the y value is 0.5
-
-    sigma : float
-       The variance parameter. Determines the slope of the curve at the point
-       of Deflection
-
-    Returns
-    -------
-
-    g : float or array
-        The cumulative gaussian with mean $\\mu$ and variance $\\sigma$
-        evaluated at all points in `x`.
-
-    Notes
-    -----
-    Based on:
-    http://en.wikipedia.org/wiki/Normal_distribution#Cumulative_distribution_function
-
-    The cumulative Gaussian function is defined as:
-
-    .. math::
-
-        \\Phi(x) = \\frac{1}{2} [1 + erf(\\frac{x}{\\sqrt{2}})]
-
-    Where, $erf$, the error function is defined as:
-
-    .. math::
-
-        erf(x) = \\frac{1}{\\sqrt{\\pi}} \int_{-x}^{x} e^{t^2} dt
-
-    """
-    return 0.5 * (1 + erf((x - mu) / (np.sqrt(2) * sigma)))
+class xnat_query_subjects(object):
+    """get the subject ids from xnat"""
+    def __init__(self,cookie,url_base,project):
+        self.cookie=cookie
+        self.url_base=url_base
+        self.project=project
 
 
-def opt_err_func(params, x, y, func):
-    """
-    Error function for fitting a function using non-linear optimization.
-
-    Parameters
-    ----------
-    params : tuple
-        A tuple with the parameters of `func` according to their order of
-        input
-
-    x : float array
-        An independent variable.
-
-    y : float array
-        The dependent variable.
-
-    func : function
-        A function with inputs: `(x, *params)`
-
-    Returns
-    -------
-    float array
-        The marginals of the fit to x/y given the params
-    """
-    return y - func(x, *params)
+    def get_subjects(self):
+        subject_query = requests.get(self.url_base+'subjects', cookies=self.cookie)
+        if subject_query.ok:
+            subject_json = subject_query.json()
+            subject_list_dict = subject_json['ResultSet']['Result']
+            self.subject_ids = { x['label']:0 for x in subject_list_dict }
 
 
-class Model(object):
-    """Class for fitting cumulative Gaussian functions to data"""
-    def __init__(self, func=cumgauss):
-        """ Initialize a model object.
+class xnat_query_sessions(object):
+    """get the sessions from a particular subject"""
+    def __init__(self,cookie,url_base,project,subject):
+        self.cookie=cookie
+        self.url_base=url_base
+        self.subject=subject
+        self.project=project
 
-        Parameters
-        ----------
-        data : Pandas DataFrame
-            Data from a subjective contrast judgement experiment
-
-        func : callable, optional
-            A function that relates x and y through a set of parameters.
-            Default: :func:`cumgauss`
-        """
-        self.func = func
-
-    def fit(self, x, y, initial=[0.5, 1]):
-        """
-        Fit a Model to data.
-
-        Parameters
-        ----------
-        x : float or array
-           The independent variable: contrast values presented in the
-           experiment
-        y : float or array
-           The dependent variable
-
-        Returns
-        -------
-        fit : :class:`Fit` instance
-            A :class:`Fit` object that contains the parameters of the model.
-
-        """
-        params, _ = opt.leastsq(opt_err_func, initial,
-                                args=(x, y, self.func))
-        return Fit(self, params)
+    def get_sessions(self,session_labels=None):
+        session_query = requests.get(self.url_base+'subjects/%s/experiments' % (self.subject), cookies=self.cookie)
+        if session_query.ok:
+            session_json = session_query.json()
+            session_list_dict = session_json['ResultSet']['Result']
+            if session_labels is not None:
+                self.session_ids = { sess_dict['label']: {sess_label: 0} for sess_label,sess_dict in zip(session_labels,session_list_dict) }
+            else:
+                self.session_ids = { x['label']: 0 for x in session_list_dict }
 
 
-class Fit(object):
-    """
-    Class for representing a fit of a model to data
-    """
-    def __init__(self, model, params):
-        """
-        Initialize a :class:`Fit` object.
+class xnat_query_scans(object):
+    """get the scans from a particular session"""
+    def __init__(self,cookie,url_base,project,subject,session):
+        self.cookie=cookie
+        self.url_base=url_base
+        self.subject=subject
+        self.session=session
+        self.project=project
 
-        Parameters
-        ----------
-        model : a :class:`Model` instance
-            An object representing the model used
+    def get_scans(self):
+          scan_query = requests.get(self.url_base+'subjects/%s/experiments/%s/scans/' % (self.subject,self.session), cookies=self.cookie)
+          if scan_query.ok:
+              scan_json = scan_query.json()
+              scan_list_dict = scan_json['ResultSet']['Result']
+              self.scan_ids = { x['ID']:{x['type'] } for x in scan_list_dict }
 
-        params : array or list
-            The parameters of the model evaluated for the data
 
-        """
-        self.model = model
-        self.params = params
+class xnat_query_dicoms(object):
+    """get the dicoms from a particular scan"""
+    def __init__(self,cookie,url_base,project,subject,session,scan):
+        self.cookie=cookie
+        self.url_base=url_base
+        self.subject=subject
+        self.session=session
+        self.scan=scan
 
-    def predict(self, x):
-        """
-        Predict values of the dependent variable based on values of the
-        indpendent variable.
+    def get_dicoms(self,out_dir):
+        #http://stackoverflow.com/questions/4917284/extract-files-from-zip-without-keeping-the-structure-using-python-zipfile
+        import zipfile
+        import StringIO
+        import shutil
+        dicom_query = requests.get(self.url_base+'subjects/%s/experiments/%s/scans/%s/resources/DICOM/files?format=zip' % (self.subject,self.session,self.scan), cookies=self.cookie)
+        if dicom_query.ok:
+            dicom_zip = zipfile.ZipFile(StringIO.StringIO(dicom_query.content))
+            for member in dicom_zip.namelist():
+                filename = os.path.basename(member)
+                if not filename:
+                    continue
+                source = dicom_zip.open(member)
+                target = file(os.path.join(out_dir,filename), "wb")
+                with source, target:
+                    shutil.copyfileobj(source, target)
 
-        Parameters
-        ----------
-        x : float or array
-            Values of the independent variable. Can be values presented in
-            the experiment. For out-of-sample prediction (e.g. in
-            cross-validation), these can be values
-            that were not presented in the experiment.
 
-        Returns
-        -------
-        y : float or array
-            Predicted values of the dependent variable, corresponding to
-            values of the independent variable.
-        """
-        return self.model.func(x, *self.params)
+def parse_cmdline(args):
+    """Parse command line arguments."""
+    import argparse
+    parser = argparse.ArgumentParser(
+        description=(
+            'download_xnat.py downloads xnat dicoms and saves them in BIDs compatible directory format'))
+
+    #Required arguments
+    requiredargs = parser.add_argument_group('Required arguments')
+    requiredargs.add_argument('-i','--input_json',
+                              dest='input_json',required=True,
+                              help='json file defining inputs for this script.')
+    parsed_args = parser.parse_args(args)
+
+    return parsed_args
+
+def parse_json(json_file):
+    """Parse json file."""
+    import json
+    with open(json_file) as json_input:
+        input_dict = json.load(json_input)
+    mandatory_keys = ['username','scan_dict','out_dir','sessions','session_labels','project','subjects','password','scans']
+
+    #are there any inputs in the json_file that are not supported?
+    extra_inputs = list(set(input_dict.keys()) - set(mandatory_keys))
+    if extra_inputs:
+        print('option(s) not supported: %s' % str(extra_inputs))
+
+    #are there missing mandatory inputs?
+    missing_inputs = list(set(mandatory_keys) - set(input_dict.keys()))
+    if missing_inputs:
+        print('option(s) need to be specified in input file: %s' % str(missing_inputs))
+        return 1
+
+    return input_dict
+
+
+
+
+
+
+
+def run_xnat(json):
+    """Command line entry point."""
+    print('start here!')
+    args = parse_cmdline(argv[1:])
+    input_dict = parse_json(args.input_json)
+    #assign variables to save space
+    username = input_dict['username']
+    password = input_dict['password']
+    out_dir = input_dict['out_dir']
+    project = input_dict['project']
+    subjects = input_dict['subjects']
+    session_labels = input_dict['session_labels']
+    sessions = input_dict['sessions']
+    scans = input_dict['scans']
+    scan_dict = input_dict['scan_dict']
+    base_dir = input_dict['out_dir']
+
+
+    #create my session for xnat
+    xnat_session = xnat_init_session(username,password,project)
+
+    #log in to my session
+    xnat_session.login()
+
+    #get the list of subjects
+    subject_query = xnat_query_subjects(xnat_session.cookie,xnat_session.url_base,project)
+    subject_query.get_subjects()
+
+    if subjects != "ALL": #if the subject list specifies who to download
+      missing_xnat_subjects = list(set(subjects) - set(subject_query.subject_ids.keys()))
+      if missing_xnat_subjects:
+        print('xnat does not have data for these subjects: %s' % str(missing_xnat_subjects))
+    else:
+        subjects = subject_query.subject_ids.keys() #use all the subjects otherwise
+
+
+    for subject in subjects:
+        session_query = xnat_query_sessions(xnat_session.cookie,xnat_session.url_base,project,subject)
+        if session_labels == "None":
+            print('no session labels, assuming there is only one session')
+            session_query.get_sessions()
+        session_query.get_sessions(session_labels)
+        subject_query.subject_ids[subject] = session_query.session_ids
+        for session in session_query.session_ids:
+            if session_labels != "None":
+                session_name = list(session_query.session_ids[session])[0]
+            scan_query = xnat_query_scans(xnat_session.cookie,xnat_session.url_base,project,subject,session)
+            scan_query.get_scans()
+            session_query.session_ids[session] = scan_query.scan_ids
+            for scan in scan_query.scan_ids:
+                scan_name=list(scan_query.scan_ids[scan])[0]
+                if scan_name in list(scan_dict):
+                    BIDs_scan=scan_dict[scan_name]
+                    #outdir without session: out_dir=base_dir+'sub-%s/%s/dcms/%s_%s' % (subject,BIDs_scan,scan,scan_name)
+                    if session_labels == "None":
+                        out_dir = base_dir+'sub-%s/%s/dcms/%s_%s' % (subject, BIDs_scan, scan, scan_name)
+                    else:
+                        out_dir = base_dir+'sub-%s/ses-%s/%s/dcms/%s_%s' % (subject, session_name, BIDs_scan, scan, scan_name)
+                    if not os.path.exists(out_dir):
+                        os.makedirs(out_dir)
+                    dicom_query = xnat_query_dicoms(xnat_session.cookie,xnat_session.url_base,project,subject,session,scan)
+                    dicom_query.get_dicoms(out_dir)
+
+if __name__ == "__main__":
+    import sys
+    run_xnat(sys.argv[1])

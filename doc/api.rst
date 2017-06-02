@@ -5,7 +5,7 @@ API
 Classes
 -------
 
-.. currentmodule:: shablona
+.. currentmodule:: xnat_BIDS
 
 .. autosummary::
    :template: class.rst

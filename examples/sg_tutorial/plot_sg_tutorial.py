@@ -13,7 +13,11 @@ scripts.
 This is a short demo for how sphinx-gallery can be used to generate beautiful,
 HTML-rendered documentation using regular python files.
 """
-
+"""
+import os,sys
+sys.path.append('/home/james/devenv/dev_packages/xnat_BIDS/')
+from xnat_BIDS import xnat_BIDS
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 
