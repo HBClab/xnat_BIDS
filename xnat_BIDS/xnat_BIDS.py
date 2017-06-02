@@ -55,7 +55,6 @@ class xnat_query_subjects(object):
         self.url_base=url_base
         self.project=project
 
-
     def get_subjects(self):
         subject_query = requests.get(self.url_base+'subjects', cookies=self.cookie)
         if subject_query.ok:
@@ -67,11 +66,13 @@ class xnat_query_subjects(object):
         if subjects != "ALL": #if the subject list specifies who to download
             missing_xnat_subjects = list(set(subjects) - set([int(x) for x in self.subject_ids.keys()]))
 
-        if missing_xnat_subjects:
-            self.filt_subjects = list(set(subjects) - set(missing_xnat_subjects))
-            print('xnat does not have data for these subjects: %s' % str(missing_xnat_subjects))
+            if missing_xnat_subjects:
+                self.filt_subjects = dict.fromkeys(list(set(subjects) - set(missing_xnat_subjects)))
+                print('xnat does not have data for these subjects: %s' % str(missing_xnat_subjects))
+            else:
+                self.filt_subjects = dict.fromkeys(subjects)
         else:
-            self.filt_subject_ids = {int(x) for x in self.subject_ids.keys()} #use all the subjects otherwise
+            self.filt_subject_ids = dict.fromkeys([int(x) for x in self.subject_ids.keys()]) #use all the subjects otherwise
 
 
 class xnat_query_sessions(object):
