@@ -44,6 +44,7 @@ class xnat_init_session(object):
             cookie_info = login_query.cookies._cookies['rpacs.icts.uiowa.edu']['/xnat']['JSESSIONID']
         else:
             print('error')
+            return 1
         self.cookie = {cookie_info.name : cookie_info.value}
 
 
@@ -244,7 +245,7 @@ def run_xnat():
                 #scan names are listed as a set type for some reason...
                 #making it a list type to access scan name as a string.
                 scan_name=list(scan_query.scan_ids[scan][0])[0]
-                scan_usable=scan_ids['10'][1]
+                scan_usable=list(scan_query.scan_ids[scan][1])[0]
                 #check to see if you defined the scan name (equivalent to scan type in
                 # the REST API in the input json file)
                 if scan_name in list(scan_dict) and scan_usable == 'usable':
