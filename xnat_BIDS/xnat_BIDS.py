@@ -263,10 +263,14 @@ def run_xnat():
                     BIDs_scan=scan_dict[scan_name]
                     BIDs_subject=str(subject).zfill(BIDs_num_length)
                     scan_name_no_spaces = scan_name.replace(" ","_")
+                    #print out so we know it's working
+                    print('Downloading Dicoms[subject: %s, session: %s, scan %s')
                     #outdir without session: out_dir=base_dir+'sub-%s/%s/dcms/%s_%s' % (subject,BIDs_scan,scan,scan_name)
                     if session_labels == "None":
+                        print('Downloading Dicoms[subject: %s, scan %s' % (subject, scan_name))
                         out_dir = base_dir+'sub-%s/%s/%s_%s' % (BIDs_subject, BIDs_scan, scan, scan_name_no_spaces)
                     else:
+                        print('Downloading Dicoms[subject: %s, session: %s, scan %s' % (subject, session, scan))
                         out_dir = base_dir+'sub-%s/ses-%s/%s/%s_%s' % (BIDs_subject, session, BIDs_scan, scan, scan_name_no_spaces)
                     if not os.path.exists(out_dir):
                         os.makedirs(out_dir)
