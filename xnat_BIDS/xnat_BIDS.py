@@ -267,10 +267,10 @@ def run_xnat():
                     print('Downloading Dicoms[subject: %s, session: %s, scan %s')
                     #outdir without session: out_dir=base_dir+'sub-%s/%s/dcms/%s_%s' % (subject,BIDs_scan,scan,scan_name)
                     if session_labels == "None":
-                        print('Downloading Dicoms[subject: %s, scan %s' % (subject, scan_name))
+                        print('Downloading Dicoms[subject: %s, scan %s' % (str(subject), scan_name))
                         out_dir = base_dir+'sub-%s/%s/%s_%s' % (BIDs_subject, BIDs_scan, scan, scan_name_no_spaces)
                     else:
-                        print('Downloading Dicoms[subject: %s, session: %s, scan %s' % (subject, session, scan))
+                        print('Downloading Dicoms[subject: %s, session: %s, scan %s' % (str(subject), session, scan_name))
                         out_dir = base_dir+'sub-%s/ses-%s/%s/%s_%s' % (BIDs_subject, session, BIDs_scan, scan, scan_name_no_spaces)
                     if not os.path.exists(out_dir):
                         os.makedirs(out_dir)
