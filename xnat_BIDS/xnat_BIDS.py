@@ -19,6 +19,8 @@ TODO:
     revise some ugly formating
     add check for quality of scan (e.g. usable?)
     don't copy if already completed? (or just have user be cognizant?)
+    parallelize the processing stream (e.g. get all the data first, then download)
+    Make main more modular (add more methods/possibly classes)
 """
 
 import requests
@@ -75,8 +77,14 @@ class xnat_query_sessions(object):
             session_json = session_query.json()
             session_list_dict = session_json['ResultSet']['Result']
             if session_labels is not None:
-                self.session_ids = { sess_dict['label']: {sess_label: 0} for sess_label,sess_dict in zip(session_labels,session_list_dict) }
+                num_sessions = int(session_json['ResultSet']['totalRecords'])
+                num_labels = len(session_labels)
+                if num_sessions != num_labels:
+                    print('%s has the wrong number of sessions, expected: %s, found: %s' % (self.subject,str(num_labels),str(num_sessions)))
+                else:
+                    self.session_ids = { sess_label : {sess_dict['label']: 0} for sess_label,sess_dict in zip(session_labels,session_list_dict) }
             else:
+                #not supported in this script
                 self.session_ids = { x['label']: 0 for x in session_list_dict }
 
 
@@ -94,8 +102,10 @@ class xnat_query_scans(object):
           if scan_query.ok:
               scan_json = scan_query.json()
               scan_list_dict = scan_json['ResultSet']['Result']
-              self.scan_ids = { x['ID']:{x['type'] } for x in scan_list_dict }
-
+              self.scan_ids = { x['ID']:[{str(x['type']) },x['quality']] for x in scan_list_dict }
+              #ID is a number like 1,3,300
+              #type is a name like fMRI FLANKER, PU:Sag CUBE FLAIR, represented as a set?
+              #quality specifies if the scan is usable
 
 class xnat_query_dicoms(object):
     """get the dicoms from a particular scan"""
@@ -174,7 +184,7 @@ def run_xnat(json):
     #assign variables to save space
     username = input_dict['username']
     password = input_dict['password']
-    out_dir = input_dict['out_dir']
+    out_dir = input_dict['out_dir'] #not sure if this is needed
     project = input_dict['project']
     subjects = input_dict['subjects']
     session_labels = input_dict['session_labels']
@@ -195,38 +205,58 @@ def run_xnat(json):
     subject_query.get_subjects()
 
     if subjects != "ALL": #if the subject list specifies who to download
-      missing_xnat_subjects = list(set(subjects) - set(subject_query.subject_ids.keys()))
+      missing_xnat_subjects = list(set(subjects) - set([int(x) for x in subject_query.subject_ids.keys()]))
+
       if missing_xnat_subjects:
+        subjects = list(set(subjects) - set(missing_xnat_subjects))
         print('xnat does not have data for these subjects: %s' % str(missing_xnat_subjects))
     else:
-        subjects = subject_query.subject_ids.keys() #use all the subjects otherwise
+        subjects = [int(x) for x in subject_query.subject_ids.keys()] #use all the subjects otherwise
 
 
     for subject in subjects:
         session_query = xnat_query_sessions(xnat_session.cookie,xnat_session.url_base,project,subject)
         if session_labels == "None":
             print('no session labels, assuming there is only one session')
-            session_query.get_sessions()
-        session_query.get_sessions(session_labels)
-        subject_query.subject_ids[subject] = session_query.session_ids
-        for session in session_query.session_ids:
-            if session_labels != "None":
-                session_name = list(session_query.session_ids[session])[0]
-            scan_query = xnat_query_scans(xnat_session.cookie,xnat_session.url_base,project,subject,session)
+            session_labels_dummy=['dummy_session']
+            subject_sessions = session_query.get_sessions(session_labels_dummy)
+        else:
+            session_query.get_sessions(session_labels)
+            xnat_sessions = session_query.session_ids
+            #example output
+            # [sub140_session_query.session_ids[x].keys()[0] for x in sub140_session_query.session_ids.keys()]
+            # ['post', 'pre']
+            #sessions = [session_query.session_ids[x].keys()[0] for x in session_query.session_ids.keys()]
+            if sessions != "ALL":
+                #find all session that are not a part of the list
+                pop_list=list(set(xnat_sessions.keys()) - set(sessions))
+                for key in pop_list:
+                    xnat_sessions.pop(key) #remove session from analysis
+            subject_sessions = xnat_sessions
+            subject_query.subject_ids[subject] = subject_sessions
+        for session in subject_sessions: #where session is pre, post, etc
+            #how to get the actual number which the session is loaded in xnat
+            session_date = subject_sessions[session].keys()[0]
+            scan_query = xnat_query_scans(xnat_session.cookie,xnat_session.url_base,project,subject,session_date)
             scan_query.get_scans()
-            session_query.session_ids[session] = scan_query.scan_ids
+            subject_sessions[session] = scan_query.scan_ids
             for scan in scan_query.scan_ids:
-                scan_name=list(scan_query.scan_ids[scan])[0]
-                if scan_name in list(scan_dict):
+                #scan names are listed as a set type for some reason...
+                #making it a list type to access scan name as a string.
+                scan_name=list(scan_query.scan_ids[scan][0])[0]
+                scan_usable=scan_ids['10'][1]
+                #check to see if you defined the scan name (equivalent to scan type in
+                # the REST API in the input json file)
+                if scan_name in list(scan_dict) and scan_usable == 'usable':
                     BIDs_scan=scan_dict[scan_name]
                     #outdir without session: out_dir=base_dir+'sub-%s/%s/dcms/%s_%s' % (subject,BIDs_scan,scan,scan_name)
                     if session_labels == "None":
-                        out_dir = base_dir+'sub-%s/%s/dcms/%s_%s' % (subject, BIDs_scan, scan, scan_name)
+                        out_dir = base_dir+'sub-%s/%s/%s_%s' % (subject, BIDs_scan, scan, scan_name)
                     else:
-                        out_dir = base_dir+'sub-%s/ses-%s/%s/dcms/%s_%s' % (subject, session_name, BIDs_scan, scan, scan_name)
+                        out_dir = base_dir+'sub-%s/ses-%s/%s/%s_%s' % (subject, session, BIDs_scan, scan, scan_name)
                     if not os.path.exists(out_dir):
                         os.makedirs(out_dir)
-                    dicom_query = xnat_query_dicoms(xnat_session.cookie,xnat_session.url_base,project,subject,session,scan)
+                    dicom_query = xnat_query_dicoms(xnat_session.cookie,xnat_session.url_base,project,subject,session_date,scan)
                     dicom_query.get_dicoms(out_dir)
 
 if __name__ == "__main__":
