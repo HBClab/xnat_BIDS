@@ -176,7 +176,7 @@ def parse_json(json_file):
 
 
 
-def run_xnat(json):
+def run_xnat():
     """Command line entry point."""
     print('start here!')
     args = parse_cmdline(argv[1:])
@@ -261,4 +261,4 @@ def run_xnat(json):
 
 if __name__ == "__main__":
     import sys
-    run_xnat(sys.argv[1])
+    run_xnat()
