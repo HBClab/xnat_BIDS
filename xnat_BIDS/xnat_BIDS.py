@@ -67,10 +67,10 @@ class xnat_query_subjects(object):
             missing_xnat_subjects = list(set(subjects) - set([int(x) for x in self.subject_ids.keys()]))
 
             if missing_xnat_subjects:
-                self.filt_subjects = dict.fromkeys(list(set(subjects) - set(missing_xnat_subjects)))
+                self.filt_subject_ids = dict.fromkeys(list(set(subjects) - set(missing_xnat_subjects)))
                 print('xnat does not have data for these subjects: %s' % str(missing_xnat_subjects))
             else:
-                self.filt_subjects = dict.fromkeys(subjects)
+                self.filt_subject_ids = dict.fromkeys(subjects)
         else:
             self.filt_subject_ids = dict.fromkeys([int(x) for x in self.subject_ids.keys()]) #use all the subjects otherwise
 
@@ -98,6 +98,7 @@ class xnat_query_sessions(object):
             else:
                 #not supported in this script
                 self.session_ids = { x['label']: 0 for x in session_list_dict }
+
     def filter_sessions(self,sessions):
         #updates the session_ids dictionary
         if sessions != "ALL":
@@ -227,6 +228,8 @@ def run_xnat():
     subject_query.filter_subjects(subjects)
     #assign subjects the filtered dictionary
     subjects = subject_query.filt_subject_ids
+    #number to use to name BIDS outdir (e.g. 005 instead of 5)
+    BIDs_num_length = len(max([str(x) for x in list(subjects)],key=len))
     for subject in subjects:
         session_query = xnat_query_sessions(xnat_session.cookie,xnat_session.url_base,project,subject)
         if session_labels == "None":
@@ -253,16 +256,17 @@ def run_xnat():
                 #scan names are listed as a set type for some reason...
                 #making it a list type to access scan name as a string.
                 scan_name=list(scan_query.scan_ids[scan][0])[0]
-                scan_usable=list(scan_query.scan_ids[scan][1])
+                scan_usable=list(scan_query.scan_ids[scan])[1]
                 #check to see if you defined the scan name (equivalent to scan type in
                 # the REST API in the input json file)
                 if scan_name in list(scan_dict) and scan_usable == 'usable':
                     BIDs_scan=scan_dict[scan_name]
+                    BIDs_subject=str(subject).zfill(BIDs_num_length)
                     #outdir without session: out_dir=base_dir+'sub-%s/%s/dcms/%s_%s' % (subject,BIDs_scan,scan,scan_name)
                     if session_labels == "None":
-                        out_dir = base_dir+'sub-%s/%s/%s_%s' % (subject, BIDs_scan, scan, scan_name)
+                        out_dir = base_dir+'sub-%s/%s/%s_%s' % (BIDs_subject, BIDs_scan, scan, scan_name)
                     else:
-                        out_dir = base_dir+'sub-%s/ses-%s/%s/%s_%s' % (subject, session, BIDs_scan, scan, scan_name)
+                        out_dir = base_dir+'sub-%s/ses-%s/%s/%s_%s' % (BIDs_subject, session, BIDs_scan, scan, scan_name)
                     if not os.path.exists(out_dir):
                         os.makedirs(out_dir)
                     dicom_query = xnat_query_dicoms(xnat_session.cookie,xnat_session.url_base,project,subject,session_date,scan)
