@@ -265,8 +265,8 @@ def run_xnat():
     for subject in subjects:
         #workaround for xnat session closing
         #xnat_session.logout()
-        xnat_session.login()
-
+        #xnat_session.login()
+        #^^potentially not necessary, test first
 
         session_query = xnat_query_sessions(xnat_session.cookie,xnat_session.url_base,project,subject)
         if session_labels == "None":
