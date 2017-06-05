@@ -21,6 +21,7 @@ TODO:
     9) Make main more modular (add more methods/possibly classes)
     10) Fix error where if a subject has a alpha character in their name I can't filter the subject.
     11) Add conversion script?
+    12) fix the logout definition
 """
 
 import requests
@@ -48,14 +49,14 @@ class xnat_init_session(object):
             return 1
 
 
-    def logout(self):
-        logout_query = requests.delete(self.url_base,self.cookie)
+    #def logout(self):
+    #    logout_query = requests.delete(self.url_base,self.cookie)
 
-        if logout_query.ok:
-            print('logout successful')
-        else:
-            print('logout unsuccessful')
-            return 1
+    #    if logout_query.ok:
+    #        print('logout successful')
+    #    else:
+    #        print('logout unsuccessful')
+    #        return 1
 
 
 class xnat_query_subjects(object):
@@ -204,7 +205,7 @@ def parse_json(json_file):
         input_dict = json.load(json_input)
     mandatory_keys = ['username','scan_dict','dcm_dir','sessions','session_labels','project','subjects','scans']
     optional_keys = ['subject_variables_csv','zero_pad','nii_dir']
-    total_keys = mandatory_keys.extend(optional_keys)
+    total_keys = mandatory_keys+optional_keys
     #are there any inputs in the json_file that are not supported?
     extra_inputs = list(set(input_dict.keys()) - set(total_keys))
     if extra_inputs:
@@ -226,7 +227,6 @@ def run_xnat():
     input_dict = parse_json(args.input_json)
     #assign variables to save space
     username = input_dict['username']
-    nii_dir = input_dict['nii_dir'] #not sure if this is needed
     project = input_dict['project']
     subjects = input_dict['subjects']
     session_labels = input_dict['session_labels']
@@ -237,9 +237,9 @@ def run_xnat():
     #optional entries
     sub_vars = input_dict.get('subject_variables_csv', False)
     BIDs_num_length = input_dict.get('zero_pad', False)
-
+    nii_dir = input_dict.get('nii_dir', False) #not sure if this is needed
     #make the BIDs subject dictionary
-    if not sub_vars:
+    if sub_vars:
         sub_vars_dict = subject_variables_dictionary(sub_vars)
 
     #get the password
@@ -264,7 +264,7 @@ def run_xnat():
         BIDs_num_length = len(max([str(x) for x in list(subjects)],key=len))
     for subject in subjects:
         #workaround for xnat session closing
-        xnat_session.logout()
+        #xnat_session.logout()
         xnat_session.login()
 
         session_query = xnat_query_sessions(xnat_session.cookie,xnat_session.url_base,project,subject)
@@ -299,9 +299,9 @@ def run_xnat():
                     BIDs_scan = scan_dict[scan_name][0]
                     BIDs_scan_suffix = scan_dict[scan_name][0]
                     BIDs_subject=str(subject).zfill(BIDs_num_length)
-                    if not sub_vars:
+                    if sub_vars:
                         BIDs_subject_info = sub_vars_dict.get_bids_var(str(subject))
-                        BIDs_subject = "".join(BIDs_subject_info,BIDs_subject)
+                        BIDs_subject = "".join([BIDs_subject_info,BIDs_subject])
 
                     scan_name_no_spaces = scan_name.replace(" ","_")
                     if session_labels == "None":
