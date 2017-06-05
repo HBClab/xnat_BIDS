@@ -1,0 +1,20 @@
+{
+	"username": "jdkent",
+	"out_dir": "/Users/jdkent/VossLabMount/Projects/PACR-AD/Imaging/Raw/",
+	"subject_variables_csv": "/Users/jdkent/VossLabMount/Projects/PACR-AD/Imaging/Raw/subject_vars.csv",
+	"project": "VOSS_PACRAD",
+	"subjects": [ 204,5,7 ],
+	"session_labels": ["pre","post"],
+	"sessions": ["pre"],
+	"scans": ["anat","func","fmap","dwi","cbf"],
+	"scan_dict" : {
+					    "Field Map": ["fmap","fieldmap"],
+					    "PU:fMRI FLANKER": ["func","task-flanker_bold"],
+					    "PU:fMRI Resting State": ["func","task-rest_bold"],
+					    "FLAIR":["anat","T2w"],
+					    "DTI": ["dwi","dwi"],
+					    "3D_ASL": ["cbf","acq-asl"],
+					    "PU:SAG FSPGR BRAVO": ["anat","T1w"],
+					    "Cerebral Blood Flow": ["cbf","acq-cbf"]
+					}
+}

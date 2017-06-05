@@ -1,7 +1,5 @@
-Shablona Gallery
+xnat_BIDs Examples
 ================
-
-This is the main gallery page for sphinx-gallery. It contains preview
-images of the scripts contained in all of the sub-folders of this folder.
-It also breaks these images into subsections based on folder. Click one of
-the images below to be taken its corresponding example.
+This contains an example json file and an example csv file for downloading
+dicoms from xnat in a way that is easily transferable into a BIDs compatible
+structure.

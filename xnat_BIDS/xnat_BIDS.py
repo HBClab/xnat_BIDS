@@ -10,24 +10,24 @@ Purpose:
     using the xnat rest API to download dicoms.
     see here for xnat REST API documentation: (https://wiki.xnat.org/display/XNAT16/Using+the+XNAT+REST+API)
 TODO:
-    better error checking
-    add a log to write events to
-    handle conditionals better
-    find a better way to call the script instead of main()
-    find a way to pass the password in besides writing it in json file.
-    add json descriptors according to BIDs format.
-    revise some ugly formating
-    add check for quality of scan (e.g. usable?)
-    don't copy if already completed? (or just have user be cognizant?)
-    parallelize the processing stream (e.g. get all the data first, then download)
-    Make main more modular (add more methods/possibly classes)
+    1) better error checking
+    2) add a log to write events to
+    3) handle conditionals better
+    4) find a better way to call the script instead of main()
+    5) add json descriptors according to BIDs format. (not available in API)
+    6) revise some ugly formating
+    7) don't copy if already completed? (or just have user be cognizant?)
+    8) parallelize the processing stream (e.g. get all the data first, then download)
+    9) Make main more modular (add more methods/possibly classes)
+    10) Fix error where if a subject has a alpha character in their name I can't filter the subject.
+    11) Add conversion script?
 """
 
 import requests
 import os
 import sys
 
-__all__ = ['xnat_init_session','xnat_query_subjects','xnat_query_sessions','xnat_query_scans','xnat_query_dicoms']
+__all__ = ['xnat_init_session','xnat_query_subjects','xnat_query_sessions','xnat_query_scans','xnat_query_dicoms','subject_variables_dictionary']
 
 class xnat_init_session(object):
     """starts the xnat session and allows user to login to a particular project page"""
@@ -42,10 +42,20 @@ class xnat_init_session(object):
 
         if login_query.ok:
             cookie_info = login_query.cookies._cookies['rpacs.icts.uiowa.edu']['/xnat']['JSESSIONID']
+            self.cookie = {cookie_info.name : cookie_info.value}
         else:
             print('error')
             return 1
-        self.cookie = {cookie_info.name : cookie_info.value}
+
+
+    def logout(self):
+        logout_query = requests.delete(self.url_base,self.cookie)
+
+        if logout_query.ok:
+            print('logout successful')
+        else:
+            print('logout unsuccessful')
+            return 1
 
 
 class xnat_query_subjects(object):
@@ -63,6 +73,9 @@ class xnat_query_subjects(object):
             self.subject_ids = { x['label']:0 for x in subject_list_dict }
 
     def filter_subjects(self,subjects):
+        import re
+        #catch and remove subjects with characters in the name
+
         if subjects != "ALL": #if the subject list specifies who to download
             missing_xnat_subjects = list(set(subjects) - set([int(x) for x in self.subject_ids.keys()]))
 
@@ -122,9 +135,11 @@ class xnat_query_scans(object):
           if scan_query.ok:
               scan_json = scan_query.json()
               scan_list_dict = scan_json['ResultSet']['Result']
-              self.scan_ids = { x['ID']:[{str(x['type']) },x['quality']] for x in scan_list_dict }
+              self.scan_ids = { x['ID']:[{str(x['series_description']) },x['quality']] for x in scan_list_dict }
               #ID is a number like 1,3,300
               #type is a name like fMRI FLANKER, PU:Sag CUBE FLAIR, represented as a set?
+              #^use series_description instead of type to differentiate multiple
+              #scans as the same type (e.g. DTI 64 dir versus DTI extra B0)
               #quality specifies if the scan is usable
 
 class xnat_query_dicoms(object):
@@ -153,6 +168,18 @@ class xnat_query_dicoms(object):
                 with source, target:
                     shutil.copyfileobj(source, target)
 
+class subject_variables_dictionary(object):
+    def __init__(self,sub_vars):
+        self.sub_dict = {}
+        with open(sub_vars) as sub_file:
+            for line in sub_file:
+                sub_entry = line.strip('\n').split(',')
+                self.sub_dict[sub_entry[0]] = sub_entry[1:]
+
+    def get_bids_var(self,sub_num):
+        #assume the sub_num is not zero-padded
+        #assume the entries are not zero-padded
+        return "".join(self.sub_dict[sub_num])
 
 def parse_cmdline(args):
     """Parse command line arguments."""
@@ -175,10 +202,11 @@ def parse_json(json_file):
     import json
     with open(json_file) as json_input:
         input_dict = json.load(json_input)
-    mandatory_keys = ['username','scan_dict','out_dir','sessions','session_labels','project','subjects','password','scans']
-
+    mandatory_keys = ['username','scan_dict','dcm_dir','nii_dir','sessions','session_labels','project','subjects','scans']
+    optional_keys = ['subject_variables_csv','zero_pad']
+    total_keys = mandatory_keys.extend(optional_keys)
     #are there any inputs in the json_file that are not supported?
-    extra_inputs = list(set(input_dict.keys()) - set(mandatory_keys))
+    extra_inputs = list(set(input_dict.keys()) - set(total_keys))
     if extra_inputs:
         print('option(s) not supported: %s' % str(extra_inputs))
 
@@ -190,29 +218,32 @@ def parse_json(json_file):
 
     return input_dict
 
-
-
-
-
-
-
 def run_xnat():
+    import getpass
     """Command line entry point."""
     print('start here!')
     args = parse_cmdline(sys.argv[1:])
     input_dict = parse_json(args.input_json)
     #assign variables to save space
     username = input_dict['username']
-    password = input_dict['password']
-    out_dir = input_dict['out_dir'] #not sure if this is needed
+    nii_dir = input_dict['nii_dir'] #not sure if this is needed
     project = input_dict['project']
     subjects = input_dict['subjects']
     session_labels = input_dict['session_labels']
     sessions = input_dict['sessions']
     scans = input_dict['scans']
     scan_dict = input_dict['scan_dict']
-    base_dir = input_dict['out_dir']
+    dcm_dir = input_dict['dcm_dir']
+    #optional entries
+    sub_vars = input_dict.get('subject_variables_csv', False)
+    BIDs_num_length = input_dict.get('zero_pad', False)
 
+    #make the BIDs subject dictionary
+    if not sub_vars:
+        sub_vars_dict = subject_variables_dictionary(sub_vars)
+
+    #get the password
+    password = getpass.getpass()
 
     #create my session for xnat
     xnat_session = xnat_init_session(username,password,project)
@@ -229,8 +260,13 @@ def run_xnat():
     #assign subjects the filtered dictionary
     subjects = subject_query.filt_subject_ids
     #number to use to name BIDS outdir (e.g. 005 instead of 5)
-    BIDs_num_length = len(max([str(x) for x in list(subjects)],key=len))
+    if not BIDs_num_length:
+        BIDs_num_length = len(max([str(x) for x in list(subjects)],key=len))
     for subject in subjects:
+        #workaround for xnat session closing
+        xnat_session.logout()
+        xnat_session.login()
+
         session_query = xnat_query_sessions(xnat_session.cookie,xnat_session.url_base,project,subject)
         if session_labels == "None":
             print('no session labels, assuming there is only one session')
@@ -260,22 +296,33 @@ def run_xnat():
                 #check to see if you defined the scan name (equivalent to scan type in
                 # the REST API in the input json file)
                 if scan_name in list(scan_dict) and scan_usable == 'usable':
-                    BIDs_scan=scan_dict[scan_name]
+                    BIDs_scan = scan_dict[scan_name][0]
+                    BIDs_scan_suffix = scan_dict[scan_name][0]
                     BIDs_subject=str(subject).zfill(BIDs_num_length)
+                    if not sub_vars:
+                        BIDs_subject_info = sub_vars_dict.get_bids_var(str(subject))
+                        BIDs_subject = "".join(BIDs_subject_info,BIDs_subject)
+
                     scan_name_no_spaces = scan_name.replace(" ","_")
-                    #print out so we know it's working
-                    print('Downloading Dicoms[subject: %s, session: %s, scan %s')
-                    #outdir without session: out_dir=base_dir+'sub-%s/%s/dcms/%s_%s' % (subject,BIDs_scan,scan,scan_name)
                     if session_labels == "None":
                         print('Downloading Dicoms[subject: %s, scan %s' % (str(subject), scan_name))
-                        out_dir = base_dir+'sub-%s/%s/%s_%s' % (BIDs_subject, BIDs_scan, scan, scan_name_no_spaces)
+                        #sub_dir = 'sub-%s/%s/%s_%s' % (BIDs_subject, BIDs_scan, scan, scan_name_no_spaces)
+                        sub_dir = 'sub-%s/%s/sub-%s_%s' % (BIDs_subject, BIDs_scan, BIDs_subject, BIDs_scan_suffix)
                     else:
                         print('Downloading Dicoms[subject: %s, session: %s, scan %s' % (str(subject), session, scan_name))
-                        out_dir = base_dir+'sub-%s/ses-%s/%s/%s_%s' % (BIDs_subject, session, BIDs_scan, scan, scan_name_no_spaces)
+                        #sub_dir = 'sub-%s/ses-%s/%s/%s_%s' % (BIDs_subject, session, BIDs_scan, scan, scan_name_no_spaces)
+                        sub_dir = 'sub-%s/ses-%s/%s/sub-%s_ses-%s_%s' % (BIDs_subject, session, BIDs_scan, BIDs_subject, session, BIDs_scan_suffix)
+                    out_dir = os.path.join(dcm_dir,sub_dir)
                     if not os.path.exists(out_dir):
                         os.makedirs(out_dir)
                     dicom_query = xnat_query_dicoms(xnat_session.cookie,xnat_session.url_base,project,subject,session_date,scan)
                     dicom_query.get_dicoms(out_dir)
+    #Conversion option here.
+    #convert_to_nifti(nii_dir,dcm_dir,sub_dir)
+
+
+#def convert_to_nifti(nii_dir,dcm_dir,sub_dir):
+
 
 if __name__ == "__main__":
     import sys
