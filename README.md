@@ -12,5 +12,7 @@ you can call the script from the command line by adding xnat_BIDS.py to your $PA
 ```
 > xnat_BIDS.py -i your_json.json
 ```
-
+### Requirements
+requests module
+everything else should come with a standard python install
 More documentation to come...
