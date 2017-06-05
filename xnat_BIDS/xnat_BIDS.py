@@ -106,6 +106,7 @@ class xnat_query_sessions(object):
                 num_labels = len(session_labels)
                 if num_sessions != num_labels:
                     print('%s has the wrong number of sessions, expected: %s, found: %s' % (self.subject,str(num_labels),str(num_sessions)))
+                    self.session_ids = {}
                 else:
                     self.session_ids = { sess_label : {sess_dict['label']: 0} for sess_label,sess_dict in zip(session_labels,session_list_dict) }
             else:
@@ -263,8 +264,9 @@ def run_xnat():
         BIDs_num_length = len(max([str(x) for x in list(subjects)],key=len))
     for subject in subjects:
         #workaround for xnat session closing
-        xnat_session.logout()
+        #xnat_session.logout()
         xnat_session.login()
+
 
         session_query = xnat_query_sessions(xnat_session.cookie,xnat_session.url_base,project,subject)
         if session_labels == "None":
@@ -273,7 +275,10 @@ def run_xnat():
             session_query.get_sessions(session_labels_dummy)
         else:
             session_query.get_sessions(session_labels)
-
+        #check to see if dictionary is empty
+        if not bool(session_query.session_labels):
+            #skip if there are no sessions
+            continue
         #filtering the sessions
         session_query.filter_sessions(sessions)
         subject_sessions = session_query.session_ids
