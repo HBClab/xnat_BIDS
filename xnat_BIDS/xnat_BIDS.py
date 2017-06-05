@@ -202,8 +202,8 @@ def parse_json(json_file):
     import json
     with open(json_file) as json_input:
         input_dict = json.load(json_input)
-    mandatory_keys = ['username','scan_dict','dcm_dir','nii_dir','sessions','session_labels','project','subjects','scans']
-    optional_keys = ['subject_variables_csv','zero_pad']
+    mandatory_keys = ['username','scan_dict','dcm_dir','sessions','session_labels','project','subjects','scans']
+    optional_keys = ['subject_variables_csv','zero_pad','nii_dir']
     total_keys = mandatory_keys.extend(optional_keys)
     #are there any inputs in the json_file that are not supported?
     extra_inputs = list(set(input_dict.keys()) - set(total_keys))
