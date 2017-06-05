@@ -14,5 +14,7 @@ you can call the script from the command line by adding xnat_BIDS.py to your $PA
 ```
 ### Requirements
 requests module
+
 everything else should come with a standard python install
+
 More documentation to come...
