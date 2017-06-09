@@ -174,6 +174,7 @@ class subject_variables_dictionary(object):
         self.sub_dict = {}
         with open(sub_vars) as sub_file:
             for line in sub_file:
+                #mac os specific
                 sub_entry = line.strip('\n').split(',')
                 self.sub_dict[sub_entry[0]] = sub_entry[1:]
 
@@ -205,7 +206,8 @@ def parse_json(json_file):
         input_dict = json.load(json_input)
     mandatory_keys = ['username','scan_dict','dcm_dir','sessions','session_labels','project','subjects','scans']
     optional_keys = ['subject_variables_csv','zero_pad','nii_dir']
-    total_keys = mandatory_keys.extend(optional_keys)
+    total_keys = mandatory_keys+optional_keys
+    print("total_keys: "+str(total_keys))
     #are there any inputs in the json_file that are not supported?
     extra_inputs = list(set(input_dict.keys()) - set(total_keys))
     if extra_inputs:
@@ -226,7 +228,6 @@ def run_xnat():
     input_dict = parse_json(args.input_json)
     #assign variables to save space
     username = input_dict['username']
-    nii_dir = input_dict['nii_dir'] #not sure if this is needed
     project = input_dict['project']
     subjects = input_dict['subjects']
     session_labels = input_dict['session_labels']
@@ -237,11 +238,13 @@ def run_xnat():
     #optional entries
     sub_vars = input_dict.get('subject_variables_csv', False)
     BIDs_num_length = input_dict.get('zero_pad', False)
+    nii_dir = input_dict.get('nii_dir', False) #not sure if this is needed
 
     #make the BIDs subject dictionary
-    if not sub_vars:
+    if os.path.isfile(sub_vars):
         sub_vars_dict = subject_variables_dictionary(sub_vars)
-
+        print('sub_vars_dict')
+        print(str(sub_vars_dict.sub_dict))
     #get the password
     password = getpass.getpass()
 
@@ -276,7 +279,7 @@ def run_xnat():
         else:
             session_query.get_sessions(session_labels)
         #check to see if dictionary is empty
-        if not bool(session_query.session_labels):
+        if not bool(session_query.session_ids):
             #skip if there are no sessions
             continue
         #filtering the sessions
@@ -301,11 +304,15 @@ def run_xnat():
                 # the REST API in the input json file)
                 if scan_name in list(scan_dict) and scan_usable == 'usable':
                     BIDs_scan = scan_dict[scan_name][0]
-                    BIDs_scan_suffix = scan_dict[scan_name][0]
+                    BIDs_scan_suffix = scan_dict[scan_name][1]
                     BIDs_subject=str(subject).zfill(BIDs_num_length)
-                    if not sub_vars:
+                    print('sub_vars: '+str(sub_vars))
+                    if os.path.isfile(sub_vars):
+                        print('made it here!')
                         BIDs_subject_info = sub_vars_dict.get_bids_var(str(subject))
-                        BIDs_subject = "".join(BIDs_subject_info,BIDs_subject)
+                        print('BIDs_subject_info: '+BIDs_subject_info)
+                        BIDs_subject = "".join([BIDs_subject_info,BIDs_subject])
+                        print('BIDs_subject: '+BIDs_subject)
 
                     scan_name_no_spaces = scan_name.replace(" ","_")
                     if session_labels == "None":
@@ -317,6 +324,7 @@ def run_xnat():
                         #sub_dir = 'sub-%s/ses-%s/%s/%s_%s' % (BIDs_subject, session, BIDs_scan, scan, scan_name_no_spaces)
                         sub_dir = 'sub-%s/ses-%s/%s/sub-%s_ses-%s_%s' % (BIDs_subject, session, BIDs_scan, BIDs_subject, session, BIDs_scan_suffix)
                     out_dir = os.path.join(dcm_dir,sub_dir)
+                    print('out_dir: '+str(out_dir))
                     if not os.path.exists(out_dir):
                         os.makedirs(out_dir)
                     dicom_query = xnat_query_dicoms(xnat_session.cookie,xnat_session.url_base,project,subject,session_date,scan)
