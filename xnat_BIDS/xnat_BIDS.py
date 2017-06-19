@@ -21,6 +21,7 @@ TODO:
     9) Make main more modular (add more methods/possibly classes)
     10) Fix error where if a subject has a alpha character in their name I can't filter the subject.
     11) Add conversion script?
+    12) make the session re-ordering better (ording based on string instead of date/number)
 """
 
 import requests
@@ -101,6 +102,8 @@ class xnat_query_sessions(object):
         if session_query.ok:
             session_json = session_query.json()
             session_list_dict = session_json['ResultSet']['Result']
+            #sort the session list (fix issues where they are uploaded in the wrong order)
+            session_list_dict.sort()
             if session_labels is not None:
                 num_sessions = int(session_json['ResultSet']['totalRecords'])
                 num_labels = len(session_labels)
