@@ -106,7 +106,8 @@ class xnat_query_sessions(object):
                 num_labels = len(session_labels)
                 if num_sessions != num_labels:
                     print('%s has the wrong number of sessions, expected: %s, found: %s' % (self.subject,str(num_labels),str(num_sessions)))
-                    self.session_ids = {}
+                    print('getting session info for available sessions (assuming they are in the correct order)')
+                    self.session_ids = { sess_label : {sess_dict['label']: 0} for sess_label,sess_dict in zip(session_labels[0:num_sessions],session_list_dict) }
                 else:
                     self.session_ids = { sess_label : {sess_dict['label']: 0} for sess_label,sess_dict in zip(session_labels,session_list_dict) }
             else:
@@ -327,10 +328,14 @@ def run_xnat():
                     print('out_dir: '+str(out_dir))
                     if not os.path.exists(out_dir):
                         os.makedirs(out_dir)
-                    dicom_query = xnat_query_dicoms(xnat_session.cookie,xnat_session.url_base,project,subject,session_date,scan)
-                    dicom_query.get_dicoms(out_dir)
-    #Conversion option here.
-    #convert_to_nifti(nii_dir,dcm_dir,sub_dir)
+                    dicoms = os.listdir(out_dir)
+                    if not dicoms:
+                        dicom_query = xnat_query_dicoms(xnat_session.cookie,xnat_session.url_base,project,subject,session_date,scan)
+                        dicom_query.get_dicoms(out_dir)
+                    else:
+                        print('dicoms exist: not downloading')
+    # Conversion option here.
+    # convert_to_nifti(nii_dir,dcm_dir,sub_dir)
 
 
 #def convert_to_nifti(nii_dir,dcm_dir,sub_dir):
