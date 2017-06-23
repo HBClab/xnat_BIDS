@@ -294,7 +294,7 @@ def run_xnat():
         subjects[subject] = subject_sessions
         for session in subject_sessions: #where session is pre, post, etc
             #getting the session folder name in xnat (e.g. 20150524)
-            session_date = subject_sessions[session].keys()[0]
+            session_date = list(subject_sessions[session].keys())[0]
             #scan_query object
             scan_query = xnat_query_scans(xnat_session.cookie,xnat_session.url_base,project,subject,session_date)
             #makes a dictionary of scan ids
