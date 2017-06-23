@@ -103,16 +103,17 @@ class xnat_query_sessions(object):
             session_json = session_query.json()
             session_list_dict = session_json['ResultSet']['Result']
             #sort the session list (fix issues where they are uploaded in the wrong order)
-            session_list_dict.sort()
+            session_list = [session['label'] for session in session_list_dict]
+            session_list.sort()
             if session_labels is not None:
                 num_sessions = int(session_json['ResultSet']['totalRecords'])
                 num_labels = len(session_labels)
                 if num_sessions != num_labels:
                     print('%s has the wrong number of sessions, expected: %s, found: %s' % (self.subject,str(num_labels),str(num_sessions)))
                     print('getting session info for available sessions (assuming they are in the correct order)')
-                    self.session_ids = { sess_label : {sess_dict['label']: 0} for sess_label,sess_dict in zip(session_labels[0:num_sessions],session_list_dict) }
+                    self.session_ids = { sess_label : {session: 0} for sess_label,session in zip(session_labels[0:num_sessions],session_list) }
                 else:
-                    self.session_ids = { sess_label : {sess_dict['label']: 0} for sess_label,sess_dict in zip(session_labels,session_list_dict) }
+                    self.session_ids = { sess_label : {session: 0} for sess_label,session in zip(session_labels,session_list) }
             else:
                 #not supported in this script
                 self.session_ids = { x['label']: 0 for x in session_list_dict }
