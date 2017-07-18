@@ -42,7 +42,7 @@ class xnat_init_session(object):
         login_query = requests.get(self.url_base,auth=(self.username,self.password))
 
         if login_query.ok:
-            cookie_info = login_query.cookies._cookies['rpacs.icts.uiowa.edu']['/xnat']['JSESSIONID']
+            cookie_info = login_query.cookies._cookies['rpacs.iibi.uiowa.edu']['/xnat']['JSESSIONID']
             self.cookie = {cookie_info.name : cookie_info.value}
         else:
             print('error')
