@@ -33,7 +33,7 @@ __all__ = ['xnat_init_session','xnat_query_subjects','xnat_query_sessions','xnat
 class xnat_init_session(object):
     """starts the xnat session and allows user to login to a particular project page"""
     def __init__(self,username,password,project):
-        self.url_base = 'https://rpacs.icts.uiowa.edu/xnat/REST/projects/%s/' % project
+        self.url_base = 'https://rpacs.iibi.uiowa.edu/xnat/REST/projects/%s/' % project
         self.username = username
         self.password = password
         self.project = project
