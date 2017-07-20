@@ -160,17 +160,17 @@ class xnat_query_dicoms(object):
     def get_dicoms(self,out_dir):
         #http://stackoverflow.com/questions/4917284/extract-files-from-zip-without-keeping-the-structure-using-python-zipfile
         import zipfile
-        import StringIO
+        from io import BytesIO
         import shutil
         dicom_query = requests.get(self.url_base+'subjects/%s/experiments/%s/scans/%s/resources/DICOM/files?format=zip' % (self.subject,self.session,self.scan), cookies=self.cookie)
         if dicom_query.ok:
-            dicom_zip = zipfile.ZipFile(StringIO.StringIO(dicom_query.content))
+            dicom_zip = zipfile.ZipFile(BytesIO(dicom_query.content))
             for member in dicom_zip.namelist():
                 filename = os.path.basename(member)
                 if not filename:
                     continue
                 source = dicom_zip.open(member)
-                target = file(os.path.join(out_dir,filename), "wb")
+                target = open(os.path.join(out_dir,filename), "wb")
                 with source, target:
                     shutil.copyfileobj(source, target)
 
