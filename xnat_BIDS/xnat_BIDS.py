@@ -90,6 +90,7 @@ class xnat_query_subjects(object):
 
 
 class xnat_query_sessions(object):
+    import re
     """get the sessions from a particular subject"""
     def __init__(self,cookie,url_base,project,subject):
         self.cookie=cookie
@@ -104,6 +105,14 @@ class xnat_query_sessions(object):
             session_list_dict = session_json['ResultSet']['Result']
             #sort the session list (fix issues where they are uploaded in the wrong order)
             session_list = [session['label'] for session in session_list_dict]
+            date_list = [session['date'] for session in session_list_dict]
+            session_list_comp = [re.sub('_[0-9]', '', session) for session in session_list]
+            date_list_comp = [session.replace('-','') for session in session_list]
+            if session_list_comp == date_list_comp:
+                print('date check passed')
+            else:
+                return 1
+            
             session_list.sort()
             if session_labels is not None:
                 num_sessions = int(session_json['ResultSet']['totalRecords'])
